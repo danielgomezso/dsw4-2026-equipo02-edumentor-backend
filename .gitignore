@@ -1,0 +1,6 @@
+# Credenciales locales: nunca versionarlas.
+.env
+.env.*
+!.env.example
+**/application-secret.properties
+**/application-secret.yml
