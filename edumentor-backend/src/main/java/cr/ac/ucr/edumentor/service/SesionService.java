@@ -1,6 +1,7 @@
 package cr.ac.ucr.edumentor.service;
 
 import cr.ac.ucr.edumentor.dto.SesionRequest;
+import cr.ac.ucr.edumentor.dto.FinalizarSesionRequest;
 import cr.ac.ucr.edumentor.dto.SesionResponse;
 import cr.ac.ucr.edumentor.entity.*;
 import cr.ac.ucr.edumentor.repository.*;
@@ -90,6 +91,70 @@ public class SesionService {
         return SesionResponse.from(sesiones.saveAndFlush(sesion));
     }
 
+    @Transactional
+    public SesionResponse cancelar(Long id, Usuario usuario) {
+        SesionTutoria sesion = buscarParaCambiar(id);
+        boolean esEstudiante = usuario.getId().equals(sesion.getEstudiante().getId());
+        boolean esTutor = usuario.getId().equals(sesion.getTutor().getId());
+        if (!esEstudiante && !esTutor) {
+            throw new AccessDeniedException("Solo los participantes pueden cancelar la sesion");
+        }
+        if (sesion.getEstado() != EstadoSesion.REQUESTED && sesion.getEstado() != EstadoSesion.CONFIRMED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Solo se pueden cancelar solicitudes pendientes o sesiones confirmadas");
+        }
+        if (sesion.getEstado() == EstadoSesion.REQUESTED && !esEstudiante) {
+            throw new AccessDeniedException("El tutor debe rechazar la solicitud pendiente");
+        }
+        if (ahora().isAfter(sesion.getFechaHora().minusHours(2))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Debe cancelar con al menos dos horas de anticipacion");
+        }
+        sesion.setEstado(EstadoSesion.CANCELLED);
+        return SesionResponse.from(sesiones.saveAndFlush(sesion));
+    }
+
+    @Transactional
+    public SesionResponse iniciar(Long id, Usuario tutor) {
+        SesionTutoria sesion = buscarParaCambiar(id);
+        validarTutor(sesion, tutor);
+        if (sesion.getEstado() != EstadoSesion.CONFIRMED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Solo se puede iniciar una sesion confirmada");
+        }
+        if (ahora().isBefore(sesion.getFechaHora())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La sesion no puede iniciar antes de la hora pactada");
+        }
+        sesion.setEstado(EstadoSesion.IN_SESSION);
+        return SesionResponse.from(sesiones.saveAndFlush(sesion));
+    }
+
+    @Transactional
+    public SesionResponse finalizar(Long id, Usuario tutor, FinalizarSesionRequest request) {
+        SesionTutoria sesion = buscarParaCambiar(id);
+        validarTutor(sesion, tutor);
+        if (sesion.getEstado() != EstadoSesion.IN_SESSION) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Solo se puede finalizar una sesion en curso");
+        }
+        sesion.setResumen(request.resumen().trim());
+        sesion.setEstado(EstadoSesion.COMPLETED);
+        return SesionResponse.from(sesiones.saveAndFlush(sesion));
+    }
+
+    private SesionTutoria buscarParaCambiar(Long id) {
+        Long tutorId = sesiones.findTutorIdById(id).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "No existe la sesion"));
+        bloquearUsuario(tutorId);
+        return buscar(id);
+    }
+
+    private void validarTutor(SesionTutoria sesion, Usuario tutor) {
+        if (!sesion.getTutor().getId().equals(tutor.getId())) {
+            throw new AccessDeniedException("Solo el tutor asignado puede realizar esta accion");
+        }
+    }
+
+    LocalDateTime ahora() {
+        return LocalDateTime.now(ZoneId.of("America/Costa_Rica"));
+    }
+
     private SesionTutoria buscar(Long id) {
         return sesiones.findById(id).orElseThrow(() ->
                 new ResponseStatusException(HttpStatus.NOT_FOUND, "No existe la sesion"));
@@ -114,7 +179,7 @@ public class SesionService {
     private void validarDisponibilidad(SesionTutoria sesion) {
         LocalDateTime inicio = sesion.getFechaHora();
         LocalDateTime fin = inicio.plusMinutes(sesion.getDuracionMinutos());
-        if (!inicio.isAfter(LocalDateTime.now(ZoneId.of("America/Costa_Rica")))) {
+        if (!inicio.isAfter(ahora())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La sesion debe iniciar en una fecha futura");
         }
         boolean disponible = inicio.toLocalDate().equals(fin.toLocalDate())

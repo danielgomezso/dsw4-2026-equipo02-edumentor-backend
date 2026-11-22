@@ -58,4 +58,5 @@ public class SesionTutoria {
     public void setDuracionMinutos(Integer duracionMinutos) { this.duracionMinutos = duracionMinutos; }
     public void setEstado(EstadoSesion estado) { this.estado = estado; }
     public void setModalidad(Modalidad modalidad) { this.modalidad = modalidad; }
+    public void setResumen(String resumen) { this.resumen = resumen; }
 }
