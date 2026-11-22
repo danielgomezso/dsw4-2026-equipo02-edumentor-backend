@@ -32,6 +32,7 @@ class SesionIntegrationTests {
     @Autowired UsuarioRepository usuarios;
     @Autowired MateriaRepository materias;
     @Autowired DisponibilidadRepository disponibilidades;
+    @Autowired SesionRepository sesiones;
     MockMvc mvc;
     Usuario estudiante;
     Usuario tutor;
@@ -191,5 +192,97 @@ class SesionIntegrationTests {
         mvc.perform(get("/api/v1/sesiones")).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/v1/sesiones/999999").with(user(estudiante)))
                 .andExpect(status().isNotFound()).andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+    }
+
+    private long prepararSesion(EstadoSesion estado, LocalDateTime inicio) {
+        SesionTutoria sesion = new SesionTutoria();
+        sesion.setEstudiante(estudiante);
+        sesion.setTutor(tutor);
+        sesion.setMateria(materia);
+        sesion.setFechaHora(inicio);
+        sesion.setDuracionMinutos(60);
+        sesion.setModalidad(Modalidad.VIRTUAL);
+        sesion.setEstado(estado);
+        return sesiones.saveAndFlush(sesion).getId();
+    }
+
+    @Test
+    void cancelarLiberaElHorarioParaOtraSolicitud() throws Exception {
+        long id = solicitar(estudiante, tutor, fecha);
+        mvc.perform(patch("/api/v1/sesiones/" + id + "/confirmar").with(user(tutor)))
+                .andExpect(status().isOk());
+        mvc.perform(patch("/api/v1/sesiones/" + id + "/cancelar").with(user(estudiante)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.estado").value("CANCELLED"));
+        long nueva = solicitar(estudiante, tutor, fecha);
+        mvc.perform(patch("/api/v1/sesiones/" + nueva + "/confirmar").with(user(tutor)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.estado").value("CONFIRMED"));
+    }
+
+    @Test
+    void estudiantePuedeDesistirDeSolicitudPendiente() throws Exception {
+        long id = solicitar(estudiante, tutor, fecha);
+        mvc.perform(patch("/api/v1/sesiones/" + id + "/cancelar").with(user(estudiante)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.estado").value("CANCELLED"));
+        mvc.perform(patch("/api/v1/sesiones/" + id + "/confirmar").with(user(tutor)))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void rechazoDeCancelacionTardiaDevuelveProblemDetail() throws Exception {
+        long id = prepararSesion(EstadoSesion.CONFIRMED,
+                LocalDateTime.now(ZoneId.of("America/Costa_Rica")).plusHours(1));
+        mvc.perform(patch("/api/v1/sesiones/" + id + "/cancelar").with(user(tutor)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.detail").value("Debe cancelar con al menos dos horas de anticipacion"));
+    }
+
+    @Test
+    void tutorIniciaFinalizaYConsultaResumen() throws Exception {
+        long id = prepararSesion(EstadoSesion.CONFIRMED,
+                LocalDateTime.now(ZoneId.of("America/Costa_Rica")).minusMinutes(1));
+        mvc.perform(patch("/api/v1/sesiones/" + id + "/iniciar").with(user(tutor)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.estado").value("IN_SESSION"));
+        mvc.perform(patch("/api/v1/sesiones/" + id + "/finalizar").with(user(tutor))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"resumen\":\"  Repasamos funciones  \"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.estado").value("COMPLETED"))
+                .andExpect(jsonPath("$.resumen").value("Repasamos funciones"));
+        mvc.perform(get("/api/v1/sesiones/" + id).with(user(estudiante)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.resumen").value("Repasamos funciones"));
+    }
+
+    @Test
+    void finalizarExigeResumenValido() throws Exception {
+        long id = prepararSesion(EstadoSesion.IN_SESSION, fecha.minusDays(8));
+        for (String resumen : new String[]{"", "   ", "x".repeat(2001)}) {
+            mvc.perform(patch("/api/v1/sesiones/" + id + "/finalizar").with(user(tutor))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(mapper.writeValueAsString(java.util.Map.of("resumen", resumen))))
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.detail").isNotEmpty());
+        }
+        mvc.perform(patch("/api/v1/sesiones/" + id + "/finalizar").with(user(tutor))
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/sesiones/" + id).with(user(tutor)))
+                .andExpect(jsonPath("$.estado").value("IN_SESSION"));
+    }
+
+    @Test
+    void protegeLasAccionesDelCicloDeSesion() throws Exception {
+        long id = prepararSesion(EstadoSesion.CONFIRMED, fecha);
+        for (String accion : new String[]{"cancelar", "iniciar", "finalizar"}) {
+            var peticion = patch("/api/v1/sesiones/" + id + "/" + accion)
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"resumen\":\"Resumen\"}");
+            mvc.perform(peticion).andExpect(status().isUnauthorized());
+            mvc.perform(peticion.with(user(otroTutor))).andExpect(status().isForbidden());
+        }
+        mvc.perform(patch("/api/v1/sesiones/" + id + "/iniciar").with(user(estudiante)))
+                .andExpect(status().isForbidden());
+        mvc.perform(patch("/api/v1/sesiones/" + id + "/finalizar").with(user(estudiante))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"resumen\":\"Resumen\"}"))
+                .andExpect(status().isForbidden());
+        Usuario coordinador = usuarios.findByEmailIgnoreCase("coordinador@edumentor.test").orElseThrow();
+        mvc.perform(patch("/api/v1/sesiones/" + id + "/cancelar").with(user(coordinador)))
+                .andExpect(status().isForbidden());
     }
 }

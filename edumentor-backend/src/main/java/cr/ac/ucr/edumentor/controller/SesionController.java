@@ -1,6 +1,7 @@
 package cr.ac.ucr.edumentor.controller;
 
 import cr.ac.ucr.edumentor.dto.SesionRequest;
+import cr.ac.ucr.edumentor.dto.FinalizarSesionRequest;
 import cr.ac.ucr.edumentor.dto.SesionResponse;
 import cr.ac.ucr.edumentor.entity.Usuario;
 import cr.ac.ucr.edumentor.service.SesionService;
@@ -49,5 +50,23 @@ public class SesionController {
     @PreAuthorize("hasRole('TUTOR')")
     public SesionResponse rechazar(@PathVariable Long id, @AuthenticationPrincipal Usuario tutor) {
         return service.rechazar(id, tutor);
+    }
+    @PatchMapping("/{id}/cancelar")
+    @PreAuthorize("hasAnyRole('ESTUDIANTE', 'TUTOR')")
+    public SesionResponse cancelar(@PathVariable Long id, @AuthenticationPrincipal Usuario usuario) {
+        return service.cancelar(id, usuario);
+    }
+
+    @PatchMapping("/{id}/iniciar")
+    @PreAuthorize("hasRole('TUTOR')")
+    public SesionResponse iniciar(@PathVariable Long id, @AuthenticationPrincipal Usuario tutor) {
+        return service.iniciar(id, tutor);
+    }
+
+    @PatchMapping("/{id}/finalizar")
+    @PreAuthorize("hasRole('TUTOR')")
+    public SesionResponse finalizar(@PathVariable Long id, @AuthenticationPrincipal Usuario tutor,
+                                   @Valid @RequestBody FinalizarSesionRequest request) {
+        return service.finalizar(id, tutor, request);
     }
 }

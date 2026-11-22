@@ -4,12 +4,16 @@ import cr.ac.ucr.edumentor.entity.EstadoSesion;
 import cr.ac.ucr.edumentor.entity.SesionTutoria;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface SesionRepository extends JpaRepository<SesionTutoria, Long> {
     List<SesionTutoria> findByEstudianteIdOrTutorIdOrderByFechaHoraAsc(Long estudianteId, Long tutorId);
+
+    @Query("select s.tutor.id from SesionTutoria s where s.id = :id")
+    Optional<Long> findTutorIdById(@Param("id") Long id);
 
     @Query("""
             select s from SesionTutoria s

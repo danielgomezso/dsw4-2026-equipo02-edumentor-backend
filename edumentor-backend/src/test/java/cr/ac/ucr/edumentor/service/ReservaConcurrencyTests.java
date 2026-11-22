@@ -18,6 +18,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
@@ -38,6 +39,41 @@ class ReservaConcurrencyTests {
     @Test
     void dosEstudiantesNoOcupanLaMismaHoraDelTutor() throws Exception {
         comprobarConfirmaciones(true);
+    }
+
+    @Test
+    void cancelarYConfirmarALaVezNoRecuperaUnaSesionCancelada() throws Exception {
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        Datos datos = tx.execute(status -> preparar(true));
+        Usuario estudiante = usuarios.findById(datos.usuarios().get(2)).orElseThrow();
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            CountDownLatch iniciar = new CountDownLatch(1);
+            var confirmar = executor.submit(() -> {
+                assertTrue(iniciar.await(5, TimeUnit.SECONDS));
+                try {
+                    return service.confirmar(datos.sesion1(), datos.tutor1()).estado();
+                } catch (ResponseStatusException error) {
+                    assertEquals(409, error.getStatusCode().value());
+                    return null;
+                }
+            });
+            var cancelar = executor.submit(() -> {
+                assertTrue(iniciar.await(5, TimeUnit.SECONDS));
+                return service.cancelar(datos.sesion1(), estudiante).estado();
+            });
+            iniciar.countDown();
+            confirmar.get(15, TimeUnit.SECONDS);
+            assertEquals(EstadoSesion.CANCELLED, cancelar.get(15, TimeUnit.SECONDS));
+            tx.executeWithoutResult(status -> assertEquals(EstadoSesion.CANCELLED,
+                    sesiones.findById(datos.sesion1()).orElseThrow().getEstado()));
+        } finally {
+            tx.executeWithoutResult(status -> {
+                sesiones.deleteAllByIdInBatch(List.of(datos.sesion1(), datos.sesion2()));
+                disponibilidades.deleteAllByIdInBatch(datos.horarios());
+                materias.deleteAllByIdInBatch(List.of(datos.materiaId()));
+                usuarios.deleteAllByIdInBatch(datos.usuarios());
+            });
+        }
     }
 
     private void comprobarConfirmaciones(boolean mismoTutor) throws Exception {
