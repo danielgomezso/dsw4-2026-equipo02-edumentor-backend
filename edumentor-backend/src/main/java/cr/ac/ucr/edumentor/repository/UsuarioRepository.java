@@ -2,6 +2,8 @@ package cr.ac.ucr.edumentor.repository;
 
 import cr.ac.ucr.edumentor.entity.Usuario;
 import java.util.Optional;
+import java.util.List;
+import cr.ac.ucr.edumentor.entity.Rol;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -19,4 +21,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     boolean existsByEmailIgnoreCase(String email);
 
     boolean existsByCarneIgnoreCase(String carne);
+
+    List<Usuario> findByRolOrderByApellidoAscNombreAsc(Rol rol);
 }
