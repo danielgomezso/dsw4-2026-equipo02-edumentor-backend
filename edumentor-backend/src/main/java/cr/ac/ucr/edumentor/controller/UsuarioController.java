@@ -1,6 +1,7 @@
 package cr.ac.ucr.edumentor.controller;
 
 import cr.ac.ucr.edumentor.dto.UsuarioResponse;
+import cr.ac.ucr.edumentor.dto.TutorResponse;
 import cr.ac.ucr.edumentor.entity.Usuario;
 import cr.ac.ucr.edumentor.service.UsuarioService;
 import java.util.List;
@@ -24,6 +25,11 @@ public class UsuarioController {
     @GetMapping("/me")
     public UsuarioResponse me(@AuthenticationPrincipal Usuario user) {
         return UsuarioResponse.from(user);
+    }
+
+    @GetMapping("/tutores")
+    public List<TutorResponse> listTutores() {
+        return usuarioService.listTutores();
     }
 
     @GetMapping

@@ -1,56 +1,44 @@
 # EduMentor Hub - Backend
 
-Java 21, Spring Boot 3.5 y Maven.
+Requiere Java 21. API: `http://localhost:8080`.
 
-## Base de datos
+## Servidor universitario
 
-Servidor: `163.178.173.130:1433`. Base: `EduMentorHub_Equipo02`.
+- Servidor: `163.178.173.130:1433`
+- Base: `EduMentorHub_Equipo02`
+- Usuario SQL: `Lenguajes`
 
-Los scripts estan en `edumentor-backend/src/main/resources/db/`:
+Crear `edumentor-backend/config/application-secret.properties` con:
 
-1. `01-crear-base.sql`: crea la base.
-2. `02-crear-tablas.sql`: crea las seis tablas. Ejecutarlo con `EduMentorHub_Equipo02`.
-3. `03-seed-usuarios.sql`: inserta un usuario de prueba por rol (ejecutado automaticamente en perfil `local`).
-
-## Ejecutar
-
-Desde `edumentor-backend/`, con JDK 21 configurado en `JAVA_HOME`:
-
-```powershell
-./mvnw.cmd spring-boot:run
+```properties
+DB_USERNAME=Lenguajes
+DB_PASSWORD=CONTRASENA_DEL_SERVIDOR
+DB_TRUST_SERVER_CERTIFICATE=true
+JWT_SECRET=CLAVE_BASE64_DE_AL_MENOS_32_BYTES
 ```
 
-Por defecto utiliza el perfil `local` con H2 en memoria y carga los usuarios de `03-seed-usuarios.sql`:
-
-| Rol | Correo | Contrasena | Carne |
-| :--- | :--- | :--- | :--- |
-| `ESTUDIANTE` | `estudiante@edumentor.test` | `Estudiante123!` | `E00001` |
-| `TUTOR` | `tutor@edumentor.test` | `Tutor123!` | `T00001` |
-| `COORDINADOR` | `coordinador@edumentor.test` | `Coordinador123!` | `C00001` |
-
-Para usar el servidor SQL Server, configurar antes las variables de entorno (incluido un secreto JWT en Base64 de al menos 32 bytes):
+Solicitar la contraseña al equipo. Este archivo es local y Git lo ignora. Para generar la clave JWT en PowerShell:
 
 ```powershell
-$env:SPRING_PROFILES_ACTIVE = 'sqlserver'
-$env:DB_USERNAME = 'Lenguajes'
-$credencial = Get-Credential -UserName 'Lenguajes' -Message 'Acceso a SQL Server'
-$env:DB_PASSWORD = $credencial.GetNetworkCredential().Password
-$env:DB_TRUST_SERVER_CERTIFICATE = 'true'
-$env:JWT_SECRET = '<clave-base64-minimo-32-bytes>'
+$bytes = New-Object byte[] 32
+[System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+[Convert]::ToBase64String($bytes)
 ```
 
-No guardar contrasenas ni secretos en Git.
-
-## Pruebas
+Desde la raíz del repositorio, con `JAVA_HOME` apuntando a Java 21:
 
 ```powershell
-./mvnw.cmd test
+./iniciar-servidor.ps1
 ```
 
-## Endpoints de autenticacion y usuarios
+## Cuentas de prueba
 
-- `POST /api/v1/auth/register` (publico, permite roles `ESTUDIANTE` y `TUTOR`)
-- `POST /api/v1/auth/login` (publico, devuelve token JWT y datos del usuario)
-- `GET /api/v1/usuarios/me` (autenticado)
-- `GET /api/v1/usuarios` (`COORDINADOR`)
-- `GET /api/v1/usuarios/{id}` (`COORDINADOR` o propio usuario en `{id}`)
+| Rol | Correo | Contraseña |
+| --- | --- | --- |
+| Estudiante | estudiante@edumentor.test | Estudiante123! |
+| Tutor | tutor@edumentor.test | Tutor123! |
+| Coordinador | coordinador@edumentor.test | Coordinador123! |
+
+Scripts en `edumentor-backend/src/main/resources/db/`: `01` crea la base, `02` las tablas, `03` los usuarios y `04` los datos de ejemplo. En el servidor ya están cargados; no repetir `01`, `02` ni `03`.
+
+Para H2 local o pruebas, desde `edumentor-backend/`: `./mvnw.cmd spring-boot:run` o `./mvnw.cmd test`. El frontend se inicia con `npm start` en su repositorio y usa `http://localhost:4200`.

@@ -1,6 +1,8 @@
 package cr.ac.ucr.edumentor.service;
 
 import cr.ac.ucr.edumentor.dto.UsuarioResponse;
+import cr.ac.ucr.edumentor.dto.TutorResponse;
+import cr.ac.ucr.edumentor.entity.Rol;
 import cr.ac.ucr.edumentor.repository.UsuarioRepository;
 import java.util.List;
 import org.springframework.data.domain.Sort;
@@ -24,6 +26,11 @@ public class UsuarioService {
                 .map(UsuarioResponse::from)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "No existe el usuario con id " + id));
+    }
+
+    public List<TutorResponse> listTutores() {
+        return usuarioRepository.findByRolOrderByApellidoAscNombreAsc(Rol.TUTOR)
+                .stream().map(TutorResponse::from).toList();
     }
 
     public List<UsuarioResponse> list() {
