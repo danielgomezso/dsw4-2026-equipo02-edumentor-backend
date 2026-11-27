@@ -1,34 +1,44 @@
 # EduMentor Hub - Backend
 
-Java 21, Spring Boot 3.5 y Maven.
+Requiere Java 21. API: `http://localhost:8080`.
 
-## Base de datos
+## Servidor universitario
 
-Servidor: `163.178.173.130:1433`. Base: `EduMentorHub_Equipo02`.
+- Servidor: `163.178.173.130:1433`
+- Base: `EduMentorHub_Equipo02`
+- Usuario SQL: `Lenguajes`
 
-Los scripts estan en `edumentor-backend/src/main/resources/db/`:
+Crear `edumentor-backend/config/application-secret.properties` con:
 
-1. `01-crear-base.sql`: crea la base.
-2. `02-crear-tablas.sql`: crea las seis tablas. Ejecutarlo con `EduMentorHub_Equipo02`
-
-## Ejecutar
-
-Desde `edumentor-backend/`, con JDK 21 configurado en `JAVA_HOME`:
-
-```powershell
-./mvnw.cmd spring-boot:run
+```properties
+DB_USERNAME=Lenguajes
+DB_PASSWORD=CONTRASENA_DEL_SERVIDOR
+DB_TRUST_SERVER_CERTIFICATE=true
+JWT_SECRET=CLAVE_BASE64_DE_AL_MENOS_32_BYTES
 ```
 
-Por defecto utiliza H2 temporal. Para usar el servidor, configurar antes:
+Solicitar la contraseña al equipo. Este archivo es local y Git lo ignora. Para generar la clave JWT en PowerShell:
 
 ```powershell
-$env:SPRING_PROFILES_ACTIVE = 'sqlserver'
-$env:DB_USERNAME = 'Lenguajes'
-$credencial = Get-Credential -UserName 'Lenguajes' -Message 'Acceso a SQL Server'
-$env:DB_PASSWORD = $credencial.GetNetworkCredential().Password
-$env:DB_TRUST_SERVER_CERTIFICATE = 'true'
+$bytes = New-Object byte[] 32
+[System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+[Convert]::ToBase64String($bytes)
 ```
 
-La ultima variable permite el certificado del servidor universitario. No guardar contrasenas en Git.
+Desde la raíz del repositorio, con `JAVA_HOME` apuntando a Java 21:
 
-Pruebas: `./mvnw.cmd test`.
+```powershell
+./iniciar-servidor.ps1
+```
+
+## Cuentas de prueba
+
+| Rol | Correo | Contraseña |
+| --- | --- | --- |
+| Estudiante | estudiante@edumentor.test | Estudiante123! |
+| Tutor | tutor@edumentor.test | Tutor123! |
+| Coordinador | coordinador@edumentor.test | Coordinador123! |
+
+Scripts en `edumentor-backend/src/main/resources/db/`: `01` crea la base, `02` las tablas, `03` los usuarios y `04` los datos de ejemplo. En el servidor ya están cargados; no repetir `01`, `02` ni `03`.
+
+Para H2 local o pruebas, desde `edumentor-backend/`: `./mvnw.cmd spring-boot:run` o `./mvnw.cmd test`. El frontend se inicia con `npm start` en su repositorio y usa `http://localhost:4200`.
